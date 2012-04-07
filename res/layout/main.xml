@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical" >
+
+    <Button
+        android:id="@+id/decay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Decay" />
+
+    <Button
+        android:id="@+id/revert"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Revert" />
+
+    <ToggleButton
+        android:id="@+id/display"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Display"
+        android:textOn="Display On"
+        android:textOff="Display Off" />
+
+    <TextView
+        android:id="@+id/decayStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Decay: 0/0"
+        android:textAppearance="?android:attr/textAppearanceMedium" />
+
+    <TextView
+        android:id="@+id/batteryStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Battery: 50%"
+        android:textAppearance="?android:attr/textAppearanceMedium" />
+
+</LinearLayout>
