@@ -1,5 +1,8 @@
 package net.shortround.roseinterface;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -168,6 +171,9 @@ public class RoseInterfaceActivity extends Activity {
     		case MESSAGE_GET_DATA:
     			break;
     		case MESSAGE_READ:
+    			byte[] readBuf = (byte[]) message.obj;
+    			String readMessage = new String(readBuf, 0, message.arg1);
+    			parseData(readMessage);
     			break;
     		case MESSAGE_STATE_CHANGE:
     			switch(message.arg1) {
@@ -192,6 +198,19 @@ public class RoseInterfaceActivity extends Activity {
     	}
     };
     
+    private void parseData(String data) {
+    	try {
+    		JSONObject json = new JSONObject(data);
+    		
+    		batteryTextView.setText("Battery: " + json.getInt("battery"));
+    		decayTextView.setText("Decay: " + json.getInt("decay") + "/" + json.getInt("max_decay"));
+    		
+    		displayButton.setChecked(json.getBoolean("display"));
+    	} catch (JSONException e) {
+    		Log.d(TAG, "Failed to parse data", e);
+    	}
+    }
+    
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
     	switch (requestCode) {
     	case REQUEST_CONNECT_DEVICE:
@@ -201,7 +220,7 @@ public class RoseInterfaceActivity extends Activity {
     		break;
     	case REQUEST_ENABLE_BT:
     		if (resultCode == Activity.RESULT_OK) {
-    			setupBluetoothService();
+    			if (bluetoothService == null) setupBluetoothService();
     		} else {
     			Log.e(TAG, "Bluetooth not enabled");
     			finish();

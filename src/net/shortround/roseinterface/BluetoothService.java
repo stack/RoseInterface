@@ -16,6 +16,7 @@ import android.util.Log;
 public class BluetoothService {
 	// Debugging
 	private static final String TAG = "BluetoothService";
+	private static final boolean D = true;
 
 	// Name and UUID for the SDP record when creating server socket
 	private static final UUID ROSE_SERVICE_UUID = UUID.fromString("227600fc-217a-4766-83bb-49e596bb9e88");
@@ -34,13 +35,17 @@ public class BluetoothService {
 	public static final int STATE_CONNECTED = 3;  // Connected to a remote device
 	
 	public BluetoothService(Context context, Handler handler) {
+		if (D) Log.d(TAG, "New Bluetooth Service");
+		
 		adapter = BluetoothAdapter.getDefaultAdapter();
 		state = STATE_NONE;
 		this.handler = handler;
 	}
 	
 	private synchronized void setState(int value) {
+		if (D) Log.d(TAG, "setState() " + state + " -> " + value);
 		state = value;
+		
 		handler.obtainMessage(RoseInterfaceActivity.MESSAGE_STATE_CHANGE, state, -1).sendToTarget();
 	}
 	
@@ -49,6 +54,8 @@ public class BluetoothService {
 	}
 	
 	public synchronized void start() {
+		if (D) Log.d(TAG, "start");
+		
 		// Cancel any existing connect threads
 		if (connectThread != null) { connectThread.cancel(); connectThread = null; }
 		
@@ -57,6 +64,8 @@ public class BluetoothService {
 	}
 	
 	public synchronized void connect(BluetoothDevice device) {
+		if (D) Log.d(TAG, "connect to: " + device);
+		
 		// Cancel any existing connect threads
 		if (state == STATE_CONNECTING) {
 			if (connectThread != null) { connectThread.cancel(); connectThread = null; }
@@ -72,6 +81,8 @@ public class BluetoothService {
 	}
 	
 	public synchronized void connected(BluetoothSocket socket, BluetoothDevice device) {
+		if (D) Log.d(TAG, "connected");
+		
 		// Cancel the thread that made the connection
 		if (connectThread != null) { connectThread.cancel(); connectThread = null; }
 		
@@ -82,14 +93,12 @@ public class BluetoothService {
 		connectedThread = new ConnectedThread(socket);
 		connectedThread.start();
 		
-		// Get the initial data
-		Message message = handler.obtainMessage(RoseInterfaceActivity.MESSAGE_GET_DATA);
-		handler.sendMessage(message);
-		
 		setState(STATE_CONNECTED);
 	}
 	
 	public synchronized void stop() {
+		if (D) Log.d(TAG, "stop");
+		
 		if (connectedThread != null) { connectedThread.cancel(); connectedThread = null; }
 		if (connectThread != null) { connectThread.cancel(); connectThread = null; }
 		
@@ -111,6 +120,7 @@ public class BluetoothService {
 	}
 	
 	private void connectionFailed() {
+		Log.e(TAG, "Connection failed");
 		Message message = handler.obtainMessage(RoseInterfaceActivity.MESSAGE_FAILURE);
 		handler.sendMessage(message);
 		
@@ -118,6 +128,7 @@ public class BluetoothService {
 	}
 	
 	private void connectionLost() {
+		Log.e(TAG, "Connection lost");
 		Message message = handler.obtainMessage(RoseInterfaceActivity.MESSAGE_FAILURE);
 		handler.sendMessage(message);
 		
@@ -142,6 +153,7 @@ public class BluetoothService {
 		}
 		
 		public void run() {
+			Log.i(TAG, "BEGIN connectThread");
 			setName("ConnectThread");
 			
 			// Cancel discovery because we don't need it
@@ -184,6 +196,7 @@ public class BluetoothService {
 		private final BluetoothSocket socket;
 		
 		public ConnectedThread(BluetoothSocket socket) {
+			Log.d(TAG, "create ConnectedThread");
 			this.socket = socket;
 			
 			InputStream tmpIn = null;
@@ -202,6 +215,7 @@ public class BluetoothService {
 		}
 		
 		public void run() {
+			Log.i(TAG, "BEGIN connectedThread");
 			byte[] buffer = new byte[1024];
 			int bytes;
 			
@@ -213,6 +227,7 @@ public class BluetoothService {
 					
 					handler.obtainMessage(RoseInterfaceActivity.MESSAGE_READ, bytes, -1, buffer).sendToTarget();
 				} catch (IOException e) {
+					Log.e(TAG, "disconnected", e);
 					connectionLost();
 					BluetoothService.this.start();
 					break;
