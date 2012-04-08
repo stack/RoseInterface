@@ -49,7 +49,26 @@ public class RoseInterfaceActivity extends Activity {
 	// Member object for the bluetooth service
 	private BluetoothService bluetoothService = null;
 	
-    /** Called when the activity is first created. */
+    /*** View Lifecycle ***/
+	
+	public void onActivityResult(int requestCode, int resultCode, Intent data) {
+    	switch (requestCode) {
+    	case REQUEST_CONNECT_DEVICE:
+    		if (resultCode == Activity.RESULT_OK) {
+    			connectDevice(data);
+    		}
+    		break;
+    	case REQUEST_ENABLE_BT:
+    		if (resultCode == Activity.RESULT_OK) {
+    			if (bluetoothService == null) setupBluetoothService();
+    		} else {
+    			Log.e(TAG, "Bluetooth not enabled");
+    			finish();
+    		}
+    		break;
+    	}
+    }
+	
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,16 +88,28 @@ public class RoseInterfaceActivity extends Activity {
     }
     
     @Override
-    public void onStart() {
-    	super.onStart();
-    	
-    	// Request bluetooth 
-    	if (bluetoothAdapter.isEnabled()) {
-    		Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-    		startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
-    	} else {
-    		if (bluetoothService == null) setupBluetoothService();
+    public boolean onCreateOptionsMenu(Menu menu) {
+    	MenuInflater inflater = getMenuInflater();
+    	inflater.inflate(R.menu.option_menu, menu);
+    	return true;
+    }
+    
+    @Override
+    public void onDestroy() {
+    	super.onDestroy();
+    }
+    
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+    	Intent serverIntent = null;
+    	switch (item.getItemId()) {
+    	case R.id.connect_scan:
+    		serverIntent = new Intent(this, DeviceListActivity.class);
+    		startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE);
+    		return true;
     	}
+    	
+    	return false;
     }
     
     @Override
@@ -93,46 +124,22 @@ public class RoseInterfaceActivity extends Activity {
     	}
     }
     
-    private void setupBluetoothService() {
-    	// Set up buttons
-    	decayButton = (Button) findViewById(R.id.decay);
-    	decayButton.setOnClickListener(new OnClickListener() {
-    		public void onClick(View v) {
-    			sendMessage("decay");
-    		}
-    	});
-    	
-    	revertButton = (Button) findViewById(R.id.revert);
-    	revertButton.setOnClickListener(new OnClickListener() {
-    		public void onClick(View v) {
-    			sendMessage("revert");
-    		}
-    	});
-    	
-    	displayButton = (ToggleButton) findViewById(R.id.display);
-    	displayButton.setOnClickListener(new OnClickListener() {
-    		public void onClick(View v) {
-    			sendMessage("display");
-    		}
-    	});
-    	
-    	// Link up labels
-    	batteryTextView = (TextView) findViewById(R.id.batteryStatus);
-    	decayTextView = (TextView) findViewById(R.id.decayStatus);
-    	
-    	// Initialize the bluetooth service
-    	bluetoothService = new BluetoothService(this, handler);
-    	
-    	// Build the outgoing buffer
-    	outputStringBuffer = new StringBuffer("");
-    	
-    	// Shutdown the interface
-    	disableFields("Not connected");
-    }
-    
     @Override
     public synchronized void onPause() {
     	super.onPause();
+    }
+    
+    @Override
+    public void onStart() {
+    	super.onStart();
+    	
+    	// Request bluetooth 
+    	if (bluetoothAdapter.isEnabled()) {
+    		Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+    		startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
+    	} else {
+    		if (bluetoothService == null) setupBluetoothService();
+    	}
     }
     
     @Override
@@ -140,95 +147,7 @@ public class RoseInterfaceActivity extends Activity {
     	super.onStop();
     }
     
-    @Override
-    public void onDestroy() {
-    	super.onDestroy();
-    }
-    
-    private void sendMessage(String message) {
-    	// Check that we have a connection
-    	if (bluetoothService.getState() != BluetoothService.STATE_CONNECTED) {
-    		Log.e(TAG, "Send message with no connection");
-    		return;
-    	}
-    	
-    	// Check that there's something to send
-    	if (message.length() > 0) {
-    		// Get the message as bytes
-    		byte[] send = message.getBytes();
-    		bluetoothService.write(send);
-    		
-    		// Clean up
-    		outputStringBuffer.setLength(0);
-    	}
-    }
-    
-    private final Handler handler = new Handler() {
-    	@Override
-    	public void handleMessage(Message message) {
-    		switch (message.what) {
-    		case MESSAGE_FAILURE:
-    			break;
-    		case MESSAGE_GET_DATA:
-    			break;
-    		case MESSAGE_READ:
-    			byte[] readBuf = (byte[]) message.obj;
-    			String readMessage = new String(readBuf, 0, message.arg1);
-    			parseData(readMessage);
-    			break;
-    		case MESSAGE_STATE_CHANGE:
-    			switch(message.arg1) {
-    			case BluetoothService.STATE_NONE:
-    			case BluetoothService.STATE_LISTEN:
-    				// Disable fields
-    				disableFields(getString(R.string.not_connected));
-    				break;
-    			case BluetoothService.STATE_CONNECTING:
-    				// Disable fields, show connecting
-    				disableFields(getString(R.string.connecting));
-    				break;
-    			case BluetoothService.STATE_CONNECTED:
-    				// Enable fields
-    				enableFields();
-    				break;
-    			}
-    			break;
-    		case MESSAGE_WRITE:
-    			break;
-    		}
-    	}
-    };
-    
-    private void parseData(String data) {
-    	try {
-    		JSONObject json = new JSONObject(data);
-    		
-    		batteryTextView.setText("Battery: " + json.getInt("battery"));
-    		decayTextView.setText("Decay: " + json.getInt("decay") + "/" + json.getInt("max_decay"));
-    		
-    		displayButton.setChecked(json.getBoolean("display"));
-    	} catch (JSONException e) {
-    		Log.d(TAG, "Failed to parse data", e);
-    	}
-    }
-    
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-    	switch (requestCode) {
-    	case REQUEST_CONNECT_DEVICE:
-    		if (resultCode == Activity.RESULT_OK) {
-    			connectDevice(data);
-    		}
-    		break;
-    	case REQUEST_ENABLE_BT:
-    		if (resultCode == Activity.RESULT_OK) {
-    			if (bluetoothService == null) setupBluetoothService();
-    		} else {
-    			Log.e(TAG, "Bluetooth not enabled");
-    			finish();
-    		}
-    		break;
-    	}
-    }
+    /*** Bluetooth Methods ***/
     
     private void connectDevice(Intent data) {
     	// Get the device MAC address
@@ -270,23 +189,107 @@ public class RoseInterfaceActivity extends Activity {
     	sendMessage("data");
     }
     
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-    	MenuInflater inflater = getMenuInflater();
-    	inflater.inflate(R.menu.option_menu, menu);
-    	return true;
+    private final Handler handler = new Handler() {
+    	@Override
+    	public void handleMessage(Message message) {
+    		switch (message.what) {
+    		case MESSAGE_FAILURE:
+    			break;
+    		case MESSAGE_GET_DATA:
+    			break;
+    		case MESSAGE_READ:
+    			byte[] readBuf = (byte[]) message.obj;
+    			String readMessage = new String(readBuf, 0, message.arg1);
+    			parseData(readMessage);
+    			break;
+    		case MESSAGE_STATE_CHANGE:
+    			switch(message.arg1) {
+    			case BluetoothService.STATE_NONE:
+    			case BluetoothService.STATE_LISTEN:
+    				// Disable fields
+    				disableFields(getString(R.string.not_connected));
+    				break;
+    			case BluetoothService.STATE_CONNECTING:
+    				// Disable fields, show connecting
+    				disableFields(getString(R.string.connecting));
+    				break;
+    			case BluetoothService.STATE_CONNECTED:
+    				// Enable fields
+    				enableFields();
+    				break;
+    			}
+    			break;
+    		case MESSAGE_WRITE:
+    			break;
+    		}
+    	}
+    };
+
+    private void parseData(String data) {
+    	try {
+    		JSONObject json = new JSONObject(data);
+    		
+    		batteryTextView.setText("Battery: " + json.getInt("battery"));
+    		decayTextView.setText("Decay: " + json.getInt("decay") + "/" + json.getInt("max_decay"));
+    		
+    		displayButton.setChecked(json.getBoolean("display"));
+    	} catch (JSONException e) {
+    		Log.d(TAG, "Failed to parse data", e);
+    	}
     }
     
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-    	Intent serverIntent = null;
-    	switch (item.getItemId()) {
-    	case R.id.connect_scan:
-    		serverIntent = new Intent(this, DeviceListActivity.class);
-    		startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE);
-    		return true;
+    private void sendMessage(String message) {
+    	// Check that we have a connection
+    	if (bluetoothService.getState() != BluetoothService.STATE_CONNECTED) {
+    		Log.e(TAG, "Send message with no connection");
+    		return;
     	}
     	
-    	return false;
+    	// Check that there's something to send
+    	if (message.length() > 0) {
+    		// Get the message as bytes
+    		byte[] send = message.getBytes();
+    		bluetoothService.write(send);
+    		
+    		// Clean up
+    		outputStringBuffer.setLength(0);
+    	}
+    }
+    
+    private void setupBluetoothService() {
+    	// Set up buttons
+    	decayButton = (Button) findViewById(R.id.decay);
+    	decayButton.setOnClickListener(new OnClickListener() {
+    		public void onClick(View v) {
+    			sendMessage("decay");
+    		}
+    	});
+    	
+    	revertButton = (Button) findViewById(R.id.revert);
+    	revertButton.setOnClickListener(new OnClickListener() {
+    		public void onClick(View v) {
+    			sendMessage("revert");
+    		}
+    	});
+    	
+    	displayButton = (ToggleButton) findViewById(R.id.display);
+    	displayButton.setOnClickListener(new OnClickListener() {
+    		public void onClick(View v) {
+    			sendMessage("display");
+    		}
+    	});
+    	
+    	// Link up labels
+    	batteryTextView = (TextView) findViewById(R.id.batteryStatus);
+    	decayTextView = (TextView) findViewById(R.id.decayStatus);
+    	
+    	// Initialize the bluetooth service
+    	bluetoothService = new BluetoothService(this, handler);
+    	
+    	// Build the outgoing buffer
+    	outputStringBuffer = new StringBuffer("");
+    	
+    	// Shutdown the interface
+    	disableFields("Not connected");
     }
 }
