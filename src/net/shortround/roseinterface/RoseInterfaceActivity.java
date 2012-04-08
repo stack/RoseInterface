@@ -85,6 +85,7 @@ public class RoseInterfaceActivity extends Activity {
     public synchronized void onResume() {
     	super.onResume();
     	
+    	// Start the bluetooth service if we have to
     	if (bluetoothService != null) {
     		if (bluetoothService.getState() == BluetoothService.STATE_NONE) {
     			bluetoothService.start();
@@ -264,6 +265,9 @@ public class RoseInterfaceActivity extends Activity {
     	
     	// Set the title
     	setTitle(getString(R.string.app_name));
+    	
+    	// Get the latest data
+    	sendMessage("data");
     }
     
     @Override
