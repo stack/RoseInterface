@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -40,10 +41,9 @@ public class RoseInterfaceActivity extends Activity {
 	private Button decayButton;
 	private TextView decayTextView;
 	private ToggleButton displayButton;
+	private Button refreshButton;
 	private Button revertButton;
 	
-	// String buffer for outgoing messages
-	private StringBuffer outputStringBuffer;
 	// Local bluetooth adapter
 	private BluetoothAdapter bluetoothAdapter = null;
 	// Member object for the bluetooth service
@@ -68,6 +68,10 @@ public class RoseInterfaceActivity extends Activity {
     		break;
     	}
     }
+	
+	public void onBackPress() {
+		finish();
+	}
 	
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -100,6 +104,15 @@ public class RoseInterfaceActivity extends Activity {
     }
     
     @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event)  {
+        if (keyCode == KeyEvent.KEYCODE_BACK && event.getRepeatCount() == 0) {
+            return true;
+        }
+
+        return super.onKeyDown(keyCode, event);
+    }
+    
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
     	Intent serverIntent = null;
     	switch (item.getItemId()) {
@@ -121,6 +134,9 @@ public class RoseInterfaceActivity extends Activity {
     		if (bluetoothService.getState() == BluetoothService.STATE_NONE) {
     			bluetoothService.start();
     		}
+
+        	// Set up the fields
+    		prepareFieldsForState();
     	}
     }
     
@@ -159,9 +175,11 @@ public class RoseInterfaceActivity extends Activity {
     }
     
     private void disableFields(String message) {
+    	Log.d(TAG, "Disabling Fields");
     	// Disable buttons
     	decayButton.setEnabled(false);
     	displayButton.setEnabled(false);
+    	refreshButton.setEnabled(false);
     	revertButton.setEnabled(false);
     	
     	// Clear text fields
@@ -173,14 +191,13 @@ public class RoseInterfaceActivity extends Activity {
     }
     
     private void enableFields() {
+    	Log.d(TAG, "Enabling Fields");
+    	
     	// Enable buttons
     	decayButton.setEnabled(true);
     	displayButton.setEnabled(true);
+    	refreshButton.setEnabled(true);
     	revertButton.setEnabled(true);
-    	
-    	// Clear text fields
-    	batteryTextView.setText("Battery: --");
-    	decayTextView.setText("Decay: --");
     	
     	// Set the title
     	setTitle(getString(R.string.app_name));
@@ -203,33 +220,42 @@ public class RoseInterfaceActivity extends Activity {
     			parseData(readMessage);
     			break;
     		case MESSAGE_STATE_CHANGE:
-    			switch(message.arg1) {
-    			case BluetoothService.STATE_NONE:
-    			case BluetoothService.STATE_LISTEN:
-    				// Disable fields
-    				disableFields(getString(R.string.not_connected));
-    				break;
-    			case BluetoothService.STATE_CONNECTING:
-    				// Disable fields, show connecting
-    				disableFields(getString(R.string.connecting));
-    				break;
-    			case BluetoothService.STATE_CONNECTED:
-    				// Enable fields
-    				enableFields();
-    				break;
-    			}
+    			prepareFieldsForState();
     			break;
     		case MESSAGE_WRITE:
     			break;
     		}
     	}
     };
+    
+    private void prepareFieldsForState() {
+    	if (bluetoothService == null) {
+    		disableFields(getString(R.string.not_connected));
+    	} else {
+    		switch (bluetoothService.getState()) {
+    		
+    		case BluetoothService.STATE_CONNECTING:
+    			disableFields(getString(R.string.connecting));
+    			break;
+    		case BluetoothService.STATE_CONNECTED:
+    			enableFields();
+    			break;
+    		case BluetoothService.STATE_NONE:
+    		case BluetoothService.STATE_LISTEN:
+    		default:
+    			disableFields(getString(R.string.not_connected));
+    			break;
+    		}
+    	}
+    }
 
     private void parseData(String data) {
+    	Log.d(TAG, "Receiving data: " + data);
+    	
     	try {
     		JSONObject json = new JSONObject(data);
     		
-    		batteryTextView.setText("Battery: " + json.getInt("battery"));
+    		batteryTextView.setText("Battery: " + json.getInt("battery") + "%");
     		decayTextView.setText("Decay: " + json.getInt("decay") + "/" + json.getInt("max_decay"));
     		
     		displayButton.setChecked(json.getBoolean("display"));
@@ -239,6 +265,8 @@ public class RoseInterfaceActivity extends Activity {
     }
     
     private void sendMessage(String message) {
+    	Log.d(TAG, "Sending message: " + message);
+    	
     	// Check that we have a connection
     	if (bluetoothService.getState() != BluetoothService.STATE_CONNECTED) {
     		Log.e(TAG, "Send message with no connection");
@@ -250,9 +278,6 @@ public class RoseInterfaceActivity extends Activity {
     		// Get the message as bytes
     		byte[] send = message.getBytes();
     		bluetoothService.write(send);
-    		
-    		// Clean up
-    		outputStringBuffer.setLength(0);
     	}
     }
     
@@ -279,17 +304,18 @@ public class RoseInterfaceActivity extends Activity {
     		}
     	});
     	
+    	refreshButton = (Button) findViewById(R.id.refresh);
+    	refreshButton.setOnClickListener(new OnClickListener() {
+    		public void onClick(View v) {
+    			sendMessage("data");
+    		}
+    	});
+    	
     	// Link up labels
     	batteryTextView = (TextView) findViewById(R.id.batteryStatus);
     	decayTextView = (TextView) findViewById(R.id.decayStatus);
     	
     	// Initialize the bluetooth service
     	bluetoothService = new BluetoothService(this, handler);
-    	
-    	// Build the outgoing buffer
-    	outputStringBuffer = new StringBuffer("");
-    	
-    	// Shutdown the interface
-    	disableFields("Not connected");
     }
 }
